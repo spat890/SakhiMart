@@ -1,4 +1,4 @@
-# SakhiMart – MVP (40% Progress Demonstrator)
+# SakhiMart –  (40% Progress Demonstrator)
 
 SakhiMart is a prototype community marketplace and basic SHG savings ledger for Self-Help Groups. This MVP is designed for a college progress demonstration. It contains a working Flask + SQLite core and six independently runnable member modules.
 

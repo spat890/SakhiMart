@@ -1,0 +1,5 @@
+2026-11-23 21:34:10,932 | INFO | Event: LOGIN_SUCCESS | User: asha | Details: User authenticated successfully
+2026-11-23 21:34:10,933 | INFO | Event: LOGIN_FAILURE | User: asha | Details: Incorrect password entered
+2026-11-23 21:34:10,933 | INFO | Event: ACCOUNT_LOCKOUT | User: asha | Details: Account temporarily locked after repeated failures
+2026-11-23 21:34:10,934 | INFO | Event: ACCESS_DENIED | User: meena | Details: Unauthorized permission request: view_all_transactions
+2026-11-23 21:34:10,934 | INFO | Event: FRAUD_ALERT | User: asha | Details: Unusually large withdrawal

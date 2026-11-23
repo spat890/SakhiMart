@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">COMMUNITY • COMMERCE • CONFIDENCE</p>
+    <h1>Made by women.<br>Connected to opportunity.</h1>
+    <p>Discover handmade products and keep simple SHG savings records in one place.</p>
+  </div>
+  <div class="hero-mark">🌺</div>
+</section>
+
+{% if g.user %}
+<section class="panel">
+  <h2>Your savings ledger</h2>
+  <p class="balance">₹{{ "%.2f"|format(balance) }}</p>
+  <p class="muted">Current calculated balance</p>
+  <form method="post" action="{{ url_for('add_savings') }}" class="form-grid">
+    <label>Transaction type
+      <select name="kind" required><option value="deposit">Savings deposit</option><option value="withdrawal">Withdrawal</option></select>
+    </label>
+    <label>Amount (₹)<input type="number" name="amount" min="0.01" step="0.01" required></label>
+    <label class="wide">Note<input name="note" maxlength="120" placeholder="e.g. Weekly SHG savings"></label>
+    <button type="submit">Record transaction</button>
+  </form>
+  {% if recent_transactions %}
+  <h3>Recent transactions</h3>
+  <ul class="transaction-list">
+    {% for tx in recent_transactions %}
+      <li><span>{{ tx.kind|title }} – ₹{{ "%.2f"|format(tx.amount) }}</span><small>{{ tx.note or "No note" }} · {{ tx.created_at }}</small></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>Add a handmade product</h2>
+  <form method="post" action="{{ url_for('add_product') }}" class="form-grid">
+    <label>Product name<input name="name" maxlength="100" required placeholder="Handmade jute bag"></label>
+    <label>Price (₹)<input type="number" name="price" min="0" step="0.01" required></label>
+    <label>Available stock<input type="number" name="stock" min="0" step="1" required></label>
+    <label class="wide">Description<input name="description" maxlength="250" placeholder="Short product description"></label>
+    <button type="submit">Add product</button>
+  </form>
+</section>
+{% else %}
+<div class="notice">Register or log in to add products and record your savings. You can browse the marketplace below.</div>
+{% endif %}
+
+<section class="section-heading"><div><p class="eyebrow">THE MARKETPLACE</p><h2>Community creations</h2></div></section>
+<div class="product-grid">
+{% for product in products %}
+  <article class="product-card">
+    <div class="product-art">🧺</div>
+    <div class="product-info">
+      <h3>{{ product.name }}</h3>
+      <p>{{ product.description or "Handmade with care by a community seller." }}</p>
+      <div class="product-meta"><strong>₹{{ "%.2f"|format(product.price) }}</strong><span>{{ product.stock }} in stock</span></div>
+      <small>Seller: {{ product.seller_name or "Community member" }}</small>
+    </div>
+  </article>
+{% else %}
+  <p class="muted">No products yet. Log in and add the first community product.</p>
+{% endfor %}
+</div>
+{% endblock %}

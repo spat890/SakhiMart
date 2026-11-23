@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SakhiMart Hindi Voice Assistant</title>
+<style>
+body{font-family:Arial,sans-serif;background:#fff8f5;color:#342b31;max-width:760px;margin:35px auto;padding:0 18px}
+main{background:white;border:1px solid #eadde2;border-radius:16px;padding:25px}
+h1{color:#873c61}.muted{color:#766a70}.controls{display:flex;gap:10px;flex-wrap:wrap}
+button{background:#873c61;color:white;border:0;border-radius:8px;padding:11px 16px;cursor:pointer}
+button.secondary{background:#6e6470}textarea{width:100%;min-height:90px;padding:12px;border:1px solid #d8cbd1;border-radius:8px;font:inherit}
+.result{background:#f8eaf0;padding:14px;border-radius:9px;margin-top:15px}
+</style>
+</head>
+<body><main>
+<p class="muted">SAKHIMART · MEMBER 4 DEMONSTRATION</p>
+<h1>Hindi Voice Assistant</h1>
+<p>Speak a simple savings instruction, for example: “पाँच सौ रुपये जमा” or “500 जमा”. The demo recognizes speech and extracts digits when present.</p>
+<div class="controls"><button id="start">Start listening</button><button id="stop" class="secondary">Stop</button></div>
+<p id="status" class="muted">Status: Ready. Allow microphone access when asked.</p>
+<label for="manual">Manual fallback / recognized text</label>
+<textarea id="manual" placeholder="Example: 500 रुपये जमा"></textarea>
+<button id="analyze">Analyze text</button>
+<div class="result" aria-live="polite">
+<strong>Detected command</strong>
+<p id="output">No command analyzed yet.</p>
+</div>
+<p class="muted">Prototype note: Browser speech recognition availability varies. Hindi number words are not converted into numeric amounts in this MVP.</p>
+</main>
+<script>
+const statusEl=document.getElementById('status');
+const textEl=document.getElementById('manual');
+const output=document.getElementById('output');
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null;
+if(SpeechRecognition){
+  recognition=new SpeechRecognition();
+  recognition.lang='hi-IN'; recognition.interimResults=false; recognition.maxAlternatives=1;
+  recognition.onstart=()=>statusEl.textContent='Status: Listening…';
+  recognition.onresult=(event)=>{textEl.value=event.results[0][0].transcript;statusEl.textContent='Status: Speech captured.';analyze();};
+  recognition.onerror=(event)=>statusEl.textContent='Status: '+event.error+'. You can type in the box instead.';
+  recognition.onend=()=>{if(statusEl.textContent.includes('Listening'))statusEl.textContent='Status: Listening stopped.';};
+}else{
+  statusEl.textContent='Status: Speech recognition is not supported in this browser. Use manual input.';
+}
+document.getElementById('start').onclick=()=>{if(recognition)recognition.start();else statusEl.textContent='Use manual input in this browser.';};
+document.getElementById('stop').onclick=()=>{if(recognition)recognition.stop();};
+function analyze(){
+  const text=textEl.value.trim();
+  const amountMatch=text.match(/(?:₹\s*)?(\d+(?:\.\d{1,2})?)/);
+  const amount=amountMatch?Number(amountMatch[1]):null;
+  const lower=text.toLowerCase();
+  let type='Not identified';
+  if(/जमा|बचत|deposit|save/i.test(lower)) type='Savings deposit';
+  else if(/निकाल|निकासी|withdraw/i.test(lower)) type='Withdrawal';
+  output.textContent=`Text: ${text||'None'} | Amount: ${amount===null?'Not detected': '₹'+amount} | Type: ${type}`;
+}
+document.getElementById('analyze').onclick=analyze;
+</script></body></html>

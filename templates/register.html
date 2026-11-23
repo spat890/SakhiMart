@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Register · SakhiMart{% endblock %}
+{% block content %}
+<section class="auth-card"><p class="eyebrow">JOIN THE COMMUNITY</p><h1>Create account</h1>
+<form method="post">
+<label>Full name<input name="name" maxlength="80" required autocomplete="name"></label>
+<label>Username<input name="username" maxlength="40" required autocomplete="username"></label>
+<label>Password (minimum 8 characters)<input type="password" name="password" minlength="8" required autocomplete="new-password"></label>
+<button type="submit">Register</button>
+</form><p>Already registered? <a href="{{ url_for('login') }}">Login</a></p></section>
+{% endblock %}

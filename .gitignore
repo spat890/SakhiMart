@@ -6,3 +6,4 @@ instance/*.db
 uploads/*
 !uploads/.gitkeep
 .env
+.pytest_cache/

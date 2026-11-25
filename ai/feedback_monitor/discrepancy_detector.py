@@ -1,45 +1,87 @@
-"""Member 6: Flags duplicate sample transactions and negative running balances."""
-from collections import defaultdict
 
-SAMPLE_TRANSACTIONS = [
-    {"id": "T001", "member": "Asha", "kind": "deposit", "amount": 500, "reference": "UPI100"},
-    {"id": "T002", "member": "Asha", "kind": "withdrawal", "amount": 200, "reference": "CASH201"},
-    {"id": "T003", "member": "Meena", "kind": "withdrawal", "amount": 100, "reference": "CASH301"},
-    {"id": "T004", "member": "Asha", "kind": "deposit", "amount": 500, "reference": "UPI100"},
-]
+import pandas as pd
 
-def detect_issues(transactions):
-    seen = set()
-    balances = defaultdict(float)
-    issues = []
-    for tx in transactions:
-        duplicate_key = (tx["member"], tx["kind"], tx["amount"], tx["reference"])
-        if duplicate_key in seen:
-            issues.append(f"Possible duplicate transaction: {tx['id']} ({tx['reference']})")
-        seen.add(duplicate_key)
-        if tx["kind"] not in ("deposit", "withdrawal") or tx["amount"] <= 0:
-            issues.append(f"Invalid transaction data: {tx['id']}")
-            continue
-        delta = tx["amount"] if tx["kind"] == "deposit" else -tx["amount"]
-        balances[tx["member"]] += delta
-        if balances[tx["member"]] < 0:
-            issues.append(f"Negative running balance for {tx['member']} at {tx['id']}")
-    return dict(balances), issues
+df = pd.read_csv("sample_transactions.csv")
 
-def main():
-    balances, issues = detect_issues(SAMPLE_TRANSACTIONS)
-    print("SAKHIMART – TRANSACTION MONITOR")
-    print("Calculated balances:")
-    for member, balance in balances.items():
-        print(f"  {member}: ₹{balance:.2f}")
-    print("Alerts:")
-    for issue in issues:
-        print("  FLAG:", issue)
-    if not issues:
-        print("  No issues found.")
-    decision = input("Admin review (A=approve sample / F=flag sample): ").strip().upper()
-    print("Review recorded for demonstration:", "APPROVE" if decision == "A" else "FLAG" if decision == "F" else "NO VALID SELECTION")
-    print("Alerts are decision-support warnings; a human must review them.")
+balances = {}
+seen_transactions = set()
+alerts = []
 
-if __name__ == "__main__":
-    main()
+print("\n===== SHG TRANSACTION MONITOR =====")
+
+for _, row in df.iterrows():
+    tid = row["transaction_id"]
+    uid = row["user_id"]
+    amount = float(row["amount"])
+    ttype = row["type"].lower()
+
+    # Duplicate detection
+    if tid in seen_transactions:
+        alerts.append({
+            "transaction_id": tid,
+            "user_id": uid,
+            "issue": "Duplicate Transaction"
+        })
+        continue
+
+    seen_transactions.add(tid)
+
+    if uid not in balances:
+        balances[uid] = 0
+
+    if ttype == "deposit":
+        balances[uid] += amount
+    elif ttype == "withdrawal":
+        balances[uid] -= amount
+    else:
+        print("Unknown transaction type:", ttype)
+        continue
+
+    # Negative balance detection
+    if balances[uid] < 0:
+        alerts.append({
+            "transaction_id": tid,
+            "user_id": uid,
+            "issue": "Negative Balance",
+            "balance": balances[uid]
+        })
+
+print("\n===== DISCREPANCY REPORT =====")
+
+for alert in alerts:
+    print("\nTransaction:", alert["transaction_id"])
+    print("User:", alert["user_id"])
+    print("Issue:", alert["issue"])
+
+    if "balance" in alert:
+        print("Balance:", alert["balance"])
+
+print("\n===== ADMIN FEEDBACK =====")
+
+feedback = []
+
+for alert in alerts:
+    print("\nTransaction:", alert["transaction_id"])
+    print("Issue:", alert["issue"])
+
+    while True:
+        decision = input("Admin decision (Approve/Flag): ").strip().lower()
+
+        if decision in ["approve", "flag"]:
+            break
+
+        print("Enter Approve or Flag.")
+
+    feedback.append((alert["transaction_id"], decision.upper()))
+
+print("\n===== FINAL REPORT =====")
+
+for tid, decision in feedback:
+    print(tid, "| Admin:", decision)
+
+print("\nFinal Balances:")
+
+for user, balance in balances.items():
+    print(user, ":", balance)
+
+print("\nMonitoring completed successfully!")

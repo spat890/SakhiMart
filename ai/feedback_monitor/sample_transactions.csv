@@ -1,0 +1,9 @@
+
+transaction_id,user_id,amount,type
+T001,U001,500,deposit
+T002,U001,200,withdrawal
+T003,U002,1000,deposit
+T004,U002,1200,withdrawal
+T005,U003,300,deposit
+T005,U003,300,deposit
+T007,U001,100,withdrawal

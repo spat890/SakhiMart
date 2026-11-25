@@ -139,7 +139,7 @@ From the project root:
 
     python app.py
 
-Open the local address printed in the terminal (usually http://127.0.0.1:5000). Register an account and sign in to explore the marketplace and savings features. The application uses a local SQLite database.
+Open the local address printed in the terminal (usually http://127.0.0.1:5000). Register an account and sign in to explore the marketplace and savings features. The application creates its SQLite database automatically, including when started through a WSGI/test server. The Business Advisor dashboard is available at http://127.0.0.1:5000/advisor/.
 
 ## Running the modules
 
@@ -152,7 +152,7 @@ Run commands from the repository root unless a module's own instructions say oth
     python security/audit_logger.py
     python security/fraud_detection.py
 
-The access-control module contains permission-mapping logic intended for use by application routes. The supporting security scripts are demonstrations; their presence does not mean all protections are enforced by the main Flask application.
+The access-control module contains permission-mapping logic intended for use by application routes. Successful and failed logins in the main Flask app are now written to the security audit log. Other supporting security scripts remain demonstrations; their presence does not mean every protection is enforced by the main Flask application.
 
 ### Product intelligence
 

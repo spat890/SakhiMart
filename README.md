@@ -130,10 +130,3 @@ Save them in `documentation/screenshots/`. Do not use mock screenshots as eviden
 
 For the next development phase: product ordering and checkout, loan/repayment workflows, full role-based authorization, persistent voice transaction entry, production deployment, audit-log administration, model training, and comprehensive security testing.
 
-## 7. Suggested progress statement
-
-Use only what your team has actually run and verified:
-
-> The current prototype establishes the Flask and SQLite foundation, user authentication, product listing, basic savings transactions, and independently demonstrable security and AI-assisted modules. The remaining work includes integration refinement, order and loan workflows, expanded authorization, UI improvements, and end-to-end testing.
-
-Do not claim all modules are integrated if you demonstrate some as standalone scripts.

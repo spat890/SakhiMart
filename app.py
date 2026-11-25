@@ -10,6 +10,9 @@ from pathlib import Path
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from security.audit_logger import log_login_failure, log_login_success
+from ai.business_advisor.dashboard import advisor_bp
+
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_DIR = BASE_DIR / "instance"
 INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -22,6 +25,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
+app.register_blueprint(advisor_bp)
 
 
 def get_db():
@@ -164,8 +168,10 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
+            log_login_success(username)
             flash("Logged in successfully.", "success")
             return redirect(url_for("index"))
+        log_login_failure(username or "UNKNOWN")
         flash("Invalid username or password.", "error")
     return render_template("login.html")
 

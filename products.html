@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<h1>Products</h1>
+<div class="split">
+  <section class="card">
+    <h2>Add product</h2>
+    {% if session.get('user_id') %}
+      <form method="post" class="form">
+        <label>Product name
+          <input name="name" maxlength="80" required>
+        </label>
+        <label>Price in Rs
+          <input name="price" type="number" min="1" step="0.01" required>
+        </label>
+        <label>Stock quantity
+          <input name="stock" type="number" min="0" step="1" required>
+        </label>
+        <button type="submit">Save product</button>
+      </form>
+    {% else %}
+      <p>Login to add a product.</p>
+      <a class="button" href="{{ url_for('main.login') }}">Login</a>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>Product list</h2>
+    {% if products %}
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Price</th><th>Stock</th><th>Seller</th></tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+            <tr>
+              <td>{{ product['name'] }}</td>
+              <td>Rs {{ "%.2f"|format(product['price']) }}</td>
+              <td>{{ product['stock'] }}</td>
+              <td>{{ product['seller_name'] }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No products yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

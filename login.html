@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Login</h1>
+  <form method="post" class="form">
+    <label>Phone number
+      <input name="phone" value="{{ phone }}" inputmode="numeric" maxlength="10" required>
+    </label>
+    <label>Password
+      <input name="password" type="password" required>
+    </label>
+    <button type="submit">Login</button>
+  </form>
+  <p class="hint">New here? <a href="{{ url_for('main.register') }}">Create an account</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Savings{% endblock %}
+{% block content %}
+<h1>Savings ledger</h1>
+<div class="split">
+  <section class="card">
+    <h2>Record transaction</h2>
+    {% if session.get('user_id') %}
+      <p class="balance">Available balance: <strong>Rs {{ "%.2f"|format(balance) }}</strong></p>
+      <form method="post" class="form">
+        <label>Type
+          <select name="kind" required>
+            <option value="deposit">Deposit</option>
+            <option value="withdraw">Withdraw</option>
+          </select>
+        </label>
+        <label>Amount in Rs
+          <input name="amount" type="number" min="1" step="0.01" required>
+        </label>
+        <label>Note
+          <input name="note" maxlength="120" placeholder="Optional">
+        </label>
+        <button type="submit">Save entry</button>
+      </form>
+    {% else %}
+      <p>Login to record a savings entry.</p>
+      <a class="button" href="{{ url_for('main.login') }}">Login</a>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>Entries</h2>
+    {% if transactions %}
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          {% for item in transactions %}
+            <tr>
+              <td>{{ item['created_at'] }}</td>
+              <td><span class="pill {{ item['kind'] }}">{{ item['kind'] }}</span></td>
+              <td>Rs {{ "%.2f"|format(item['amount']) }}</td>
+              <td>{{ item['note'] or '' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No savings entries yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

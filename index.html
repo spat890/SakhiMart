@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}SakhiMart home{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="tag">Community commerce</p>
+  <h1>Products and savings in one place for local sellers and SHGs</h1>
+  <p class="lead">Add products, record savings deposits and withdrawals, and keep the ledger consistent.</p>
+  <div class="actions">
+    <a class="button" href="{{ url_for('main.products') }}">Manage products</a>
+    <a class="button secondary" href="{{ url_for('main.transactions') }}">Savings ledger</a>
+  </div>
+</section>
+
+{% if user %}
+<section class="card">
+  <h2>Welcome, {{ user['name'] }}</h2>
+  <p>Available balance: <strong>Rs {{ "%.2f"|format(balance) }}</strong></p>
+</section>
+{% else %}
+<section class="card">
+  <h2>Demo login</h2>
+  <p>Phone <code>{{ demo_phone }}</code> with password <code>{{ demo_password }}</code>, or create your own account.</p>
+  <a class="button" href="{{ url_for('main.login') }}">Login</a>
+</section>
+{% endif %}
+
+<section class="grid">
+  <article class="card">
+    <h3>{{ product_count }}</h3>
+    <p>Products listed</p>
+  </article>
+  <article class="card">
+    <h3>{{ transaction_count }}</h3>
+    <p>Savings entries</p>
+  </article>
+  <article class="card">
+    <h3>SQLite</h3>
+    <p>Users, products and transactions</p>
+  </article>
+</section>
+{% endblock %}

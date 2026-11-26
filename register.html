@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Create account</h1>
+  <form method="post" class="form">
+    <label>Name
+      <input name="name" value="{{ name }}" maxlength="60" required>
+    </label>
+    <label>Phone number
+      <input name="phone" value="{{ phone }}" inputmode="numeric" maxlength="10" required>
+    </label>
+    <label>Password
+      <input name="password" type="password" minlength="6" required>
+    </label>
+    <button type="submit">Register</button>
+  </form>
+  <p class="hint">Already registered? <a href="{{ url_for('main.login') }}">Login</a></p>
+</section>
+{% endblock %}

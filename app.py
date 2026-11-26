@@ -1,272 +1,245 @@
-"""SakhiMart Flask application.
-
-Run locally with: python app.py
-For WSGI deployments, point the server at app:app.
-"""
 import os
 import sqlite3
-from pathlib import Path
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    Flask,
+    current_app,
+    flash,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from security.audit_logger import log_login_failure, log_login_success
-from ai.business_advisor.dashboard import advisor_bp
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+SCHEMA_PATH = os.path.join(BASE_DIR, "schema.sql")
+DB_PATH = os.path.join(BASE_DIR, "instance", "sakhimart.db")
+DEMO_PHONE = "9000000000"
+DEMO_PASSWORD = "sakhi123"
+MIN_PASSWORD_LENGTH = 6
 
-BASE_DIR = Path(__file__).resolve().parent
-INSTANCE_DIR = BASE_DIR / "instance"
-INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = INSTANCE_DIR / "sakhimart.db"
+main = Blueprint("main", __name__)
 
-app = Flask(__name__)
-app.config.update(
-    SECRET_KEY=os.environ.get("SAKHIMART_SECRET_KEY", "local-development-only-change-me"),
-    DATABASE=os.environ.get("SAKHIMART_DATABASE", str(DB_PATH)),
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-)
-app.register_blueprint(advisor_bp)
+
+def create_app(db_path=None):
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = os.environ.get("SAKHIMART_SECRET", "dev-only-secret")
+    app.config["DATABASE"] = db_path or DB_PATH
+    app.teardown_appcontext(close_db)
+    with app.app_context():
+        init_db()
+    app.register_blueprint(main)
+    return app
 
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(app.config["DATABASE"], timeout=10)
+        g.db = sqlite3.connect(current_app.config["DATABASE"])
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
-        g.db.execute("PRAGMA busy_timeout = 10000")
     return g.db
 
 
-@app.teardown_appcontext
 def close_db(_error=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
 
 
-_initialized_databases = set()
-
-
 def init_db():
-    """Create the application tables once for each configured database path."""
-    database = str(Path(app.config["DATABASE"]).resolve())
-    if database in _initialized_databases:
-        return
-    Path(database).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(database, timeout=10)
-    try:
-        db.execute("PRAGMA foreign_keys = ON")
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                price REAL NOT NULL CHECK(price >= 0),
-                stock INTEGER NOT NULL DEFAULT 0 CHECK(stock >= 0),
-                seller_id INTEGER,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(seller_id) REFERENCES users(id)
-            );
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                kind TEXT NOT NULL CHECK(kind IN ('deposit', 'withdrawal')),
-                amount REAL NOT NULL CHECK(amount > 0),
-                note TEXT DEFAULT '',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            );
-        """)
-        db.commit()
-        _initialized_databases.add(database)
-    finally:
-        db.close()
-
-
-@app.before_request
-def prepare_request():
-    # Also initializes the database under WSGI/test servers, not only python app.py.
-    init_db()
-    user_id = session.get("user_id")
-    g.user = (
-        get_db().execute(
-            "SELECT id, name, username FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
-        if user_id else None
+    db_path = current_app.config["DATABASE"]
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    db = get_db()
+    with open(SCHEMA_PATH, encoding="utf-8") as schema:
+        db.executescript(schema.read())
+    db.execute(
+        "INSERT OR IGNORE INTO users (id, name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
+        (1, "Demo Seller", DEMO_PHONE, generate_password_hash(DEMO_PASSWORD), "seller"),
     )
+    db.commit()
 
 
-@app.route("/")
+def balance_for(user_id):
+    row = get_db().execute(
+        "SELECT COALESCE(SUM(CASE WHEN kind = 'deposit' THEN amount ELSE -amount END), 0) AS balance "
+        "FROM transactions WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    return float(row["balance"])
+
+
+def validate_product(name, price, stock):
+    if not name:
+        return "Product name is required."
+    try:
+        price_value = float(price)
+        stock_value = int(stock)
+    except ValueError:
+        return "Price must be a number and stock must be a whole number."
+    if price_value <= 0:
+        return "Price must be greater than zero."
+    if stock_value < 0:
+        return "Stock cannot be negative."
+    return None
+
+
+def validate_transaction(kind, amount, user_id):
+    if kind not in ("deposit", "withdraw"):
+        return "Choose deposit or withdraw."
+    try:
+        value = float(amount)
+    except ValueError:
+        return "Amount must be a number."
+    if value <= 0:
+        return "Amount must be greater than zero."
+    if kind == "withdraw":
+        balance = balance_for(user_id)
+        if value > balance:
+            return f"Withdrawal exceeds available balance of Rs {balance:.2f}."
+    return None
+
+
+@main.get("/")
 def index():
     db = get_db()
-    products = db.execute("""
-        SELECT products.*, users.name AS seller_name
-        FROM products LEFT JOIN users ON products.seller_id = users.id
-        ORDER BY products.id DESC
-    """).fetchall()
-    balance = 0.0
-    recent_transactions = []
-    if g.user:
-        recent_transactions = db.execute(
-            "SELECT kind, amount, note, created_at FROM transactions "
-            "WHERE user_id=? ORDER BY id DESC LIMIT 5",
-            (g.user["id"],),
-        ).fetchall()
-        totals = db.execute("""
-            SELECT COALESCE(
-                SUM(CASE WHEN kind='deposit' THEN amount ELSE -amount END), 0
-            ) AS balance
-            FROM transactions WHERE user_id=?
-        """, (g.user["id"],)).fetchone()
-        balance = totals["balance"]
+    user_id = session.get("user_id")
+    user = None
+    balance = None
+    if user_id:
+        user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        balance = balance_for(user_id)
     return render_template(
-        "index.html", products=products, balance=balance,
-        recent_transactions=recent_transactions,
+        "index.html",
+        user=user,
+        balance=balance,
+        product_count=db.execute("SELECT COUNT(*) FROM products").fetchone()[0],
+        transaction_count=db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0],
+        demo_phone=DEMO_PHONE,
+        demo_password=DEMO_PASSWORD,
     )
 
 
-@app.route("/register", methods=["GET", "POST"])
+@main.get("/health")
+def health():
+    get_db().execute("SELECT 1").fetchone()
+    return jsonify(status="ok")
+
+
+@main.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        username = request.form.get("username", "").strip().lower()
+        phone = request.form.get("phone", "").strip()
         password = request.form.get("password", "")
-        if not name or not username or len(username) > 40 or len(password) < 8:
-            flash("Enter a name and username. Password must contain at least 8 characters.", "error")
-            return render_template("register.html"), 400
-        try:
-            db = get_db()
-            db.execute(
-                "INSERT INTO users(name, username, password_hash) VALUES (?, ?, ?)",
-                (name, username, generate_password_hash(password)),
-            )
-            db.commit()
-            flash("Account created. Please log in.", "success")
-            return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
-            flash("That username is already registered.", "error")
-            return render_template("register.html"), 409
-    return render_template("register.html")
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form.get("username", "").strip().lower()
-        password = request.form.get("password", "")
-        user = get_db().execute(
-            "SELECT * FROM users WHERE username=?", (username,)
-        ).fetchone()
-        if user and check_password_hash(user["password_hash"], password):
-            session.clear()
-            session["user_id"] = user["id"]
-            session.permanent = True
-            log_login_success(username)
-            flash("Logged in successfully.", "success")
-            return redirect(url_for("index"))
-        log_login_failure(username or "UNKNOWN")
-        flash("Invalid username or password.", "error")
-    return render_template("login.html")
-
-
-@app.route("/logout", methods=["POST"])
-def logout():
-    session.clear()
-    flash("You have been logged out.", "success")
-    return redirect(url_for("index"))
-
-
-@app.route("/products/add", methods=["POST"])
-def add_product():
-    if not g.user:
-        flash("Please log in before adding a product.", "error")
-        return redirect(url_for("login"))
-    name = request.form.get("name", "").strip()
-    description = request.form.get("description", "").strip()
-    try:
-        price = float(request.form.get("price", ""))
-        stock = int(request.form.get("stock", ""))
-        if not name or len(name) > 100 or len(description) > 250:
-            raise ValueError
-        if price < 0 or stock < 0:
-            raise ValueError
-    except (ValueError, TypeError):
-        flash("Enter a valid product name, non-negative price and non-negative stock.", "error")
-        return redirect(url_for("index"))
-    db = get_db()
-    db.execute(
-        "INSERT INTO products(name, description, price, stock, seller_id) VALUES (?, ?, ?, ?, ?)",
-        (name, description, price, stock, g.user["id"]),
-    )
-    db.commit()
-    flash("Product added to the marketplace.", "success")
-    return redirect(url_for("index"))
-
-
-@app.route("/savings/add", methods=["POST"])
-def add_savings():
-    if not g.user:
-        flash("Please log in to record a savings transaction.", "error")
-        return redirect(url_for("login"))
-    kind = request.form.get("kind", "")
-    note = request.form.get("note", "").strip()
-    try:
-        amount = float(request.form.get("amount", ""))
-        if kind not in ("deposit", "withdrawal") or not (0 < amount < 1_000_000_000):
-            raise ValueError
-    except (ValueError, TypeError):
-        flash("Choose a valid transaction type and enter an amount above zero.", "error")
-        return redirect(url_for("index"))
-
-    db = get_db()
-    try:
-        # Serialize balance-check + insert so simultaneous withdrawals cannot
-        # both spend the same available balance.
-        db.execute("BEGIN IMMEDIATE")
-        current = db.execute("""
-            SELECT COALESCE(
-                SUM(CASE WHEN kind='deposit' THEN amount ELSE -amount END), 0
-            ) AS balance
-            FROM transactions WHERE user_id=?
-        """, (g.user["id"],)).fetchone()["balance"]
-        if kind == "withdrawal" and amount > current:
-            db.rollback()
-            flash("Insufficient balance. Withdrawal was not recorded.", "error")
-            return redirect(url_for("index"))
+        if not name or not phone.isdigit() or len(phone) != 10:
+            flash("Enter a name and a 10 digit phone number.", "error")
+            return render_template("register.html", name=name, phone=phone), 400
+        if len(password) < MIN_PASSWORD_LENGTH:
+            flash(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.", "error")
+            return render_template("register.html", name=name, phone=phone), 400
+        db = get_db()
+        if db.execute("SELECT 1 FROM users WHERE phone = ?", (phone,)).fetchone():
+            flash("That phone number is already registered.", "error")
+            return render_template("register.html", name=name, phone=phone), 400
         db.execute(
-            "INSERT INTO transactions(user_id, kind, amount, note) VALUES (?, ?, ?, ?)",
-            (g.user["id"], kind, amount, note[:120]),
+            "INSERT INTO users (name, phone, password_hash, role) VALUES (?, ?, ?, ?)",
+            (name, phone, generate_password_hash(password), "seller"),
         )
         db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    flash("Savings transaction recorded.", "success")
-    return redirect(url_for("index"))
+        flash("Account created. Please login.", "success")
+        return redirect(url_for("main.login"))
+    return render_template("register.html", name="", phone="")
 
 
-@app.route("/health")
-def health():
-    try:
-        get_db().execute("SELECT 1").fetchone()
-        return jsonify(status="ok", database="connected"), 200
-    except sqlite3.Error:
-        app.logger.exception("Database health check failed")
-        return jsonify(status="error", database="unavailable"), 503
+@main.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        phone = request.form.get("phone", "").strip()
+        password = request.form.get("password", "")
+        user = get_db().execute("SELECT * FROM users WHERE phone = ?", (phone,)).fetchone()
+        if user is None or not check_password_hash(user["password_hash"], password):
+            current_app.logger.warning("login failed phone=%s", phone)
+            flash("Invalid phone number or password.", "error")
+            return render_template("login.html", phone=phone), 401
+        session.clear()
+        session["user_id"] = user["id"]
+        current_app.logger.info("login success user_id=%s", user["id"])
+        return redirect(url_for("main.index"))
+    return render_template("login.html", phone="")
+
+
+@main.post("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "success")
+    return redirect(url_for("main.index"))
+
+
+@main.route("/products", methods=["GET", "POST"])
+def products():
+    db = get_db()
+    if request.method == "POST":
+        if not session.get("user_id"):
+            flash("Login required to add a product.", "error")
+            return redirect(url_for("main.login"))
+        name = request.form.get("name", "").strip()
+        price = request.form.get("price", "").strip()
+        stock = request.form.get("stock", "").strip()
+        error = validate_product(name, price, stock)
+        if error:
+            flash(error, "error")
+        else:
+            db.execute(
+                "INSERT INTO products (seller_id, name, price, stock) VALUES (?, ?, ?, ?)",
+                (session["user_id"], name, float(price), int(stock)),
+            )
+            db.commit()
+            flash("Product saved.", "success")
+        return redirect(url_for("main.products"))
+    rows = db.execute(
+        "SELECT p.*, u.name AS seller_name FROM products p JOIN users u ON u.id = p.seller_id ORDER BY p.id DESC"
+    ).fetchall()
+    return render_template("products.html", products=rows)
+
+
+@main.route("/transactions", methods=["GET", "POST"])
+def transactions():
+    db = get_db()
+    user_id = session.get("user_id")
+    if request.method == "POST":
+        if not user_id:
+            flash("Login required to record a transaction.", "error")
+            return redirect(url_for("main.login"))
+        kind = request.form.get("kind", "").strip()
+        amount = request.form.get("amount", "").strip()
+        note = request.form.get("note", "").strip()
+        error = validate_transaction(kind, amount, user_id)
+        if error:
+            flash(error, "error")
+        else:
+            db.execute(
+                "INSERT INTO transactions (user_id, kind, amount, note) VALUES (?, ?, ?, ?)",
+                (user_id, kind, float(amount), note),
+            )
+            db.commit()
+            flash(f"{kind.title()} recorded.", "success")
+        return redirect(url_for("main.transactions"))
+    rows = []
+    if user_id:
+        rows = db.execute(
+            "SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC", (user_id,)
+        ).fetchall()
+    return render_template(
+        "transactions.html",
+        transactions=rows,
+        balance=balance_for(user_id) if user_id else None,
+    )
 
 
 if __name__ == "__main__":
-    init_db()
-    print("SakhiMart database:", app.config["DATABASE"])
-    app.run(
-        host="127.0.0.1",
-        port=int(os.environ.get("PORT", "5000")),
-        debug=os.environ.get("FLASK_DEBUG", "0") == "1",
-    )
+    create_app().run(debug=True)
